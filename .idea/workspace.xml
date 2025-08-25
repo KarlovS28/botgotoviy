@@ -4,8 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9473f735-f332-462e-ac62-17433b76002f" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="9473f735-f332-462e-ac62-17433b76002f" name="Changes" comment="25.08.25">
+      <change beforePath="$PROJECT_DIR$/server/routes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/server/routes.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/storage.ts" beforeDir="false" afterPath="$PROJECT_DIR$/server/storage.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -83,7 +84,17 @@
       <workItem from="1752823042494" duration="4657000" />
       <workItem from="1753092963579" duration="7024000" />
       <workItem from="1753271341530" duration="804000" />
+      <workItem from="1756109380654" duration="6281000" />
     </task>
+    <task id="LOCAL-00001" summary="25.08.25">
+      <option name="closed" value="true" />
+      <created>1756109509893</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1756109509893</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -121,6 +132,10 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="25.08.25" />
+    <option name="LAST_COMMIT_MESSAGE" value="25.08.25" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

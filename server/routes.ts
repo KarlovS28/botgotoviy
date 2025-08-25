@@ -40,8 +40,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Find the admin user in database
         const adminUser = await db.query.users.findFirst({
           where: and(
-            eq(schema.users.username, "admin"),
-            eq(schema.users.isAdmin, true)
+              eq(schema.users.username, "admin"),
+              eq(schema.users.isAdmin, true)
           )
         });
 
@@ -86,14 +86,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.session.isAdmin) {
         const adminUser = await db.query.users.findFirst({
           where: and(
-            eq(schema.users.username, "admin"),
-            eq(schema.users.isAdmin, true)
+              eq(schema.users.username, "admin"),
+              eq(schema.users.isAdmin, true)
           )
         });
 
         if (adminUser) {
-          return res.json({ 
-            userId: adminUser.id.toString(), 
+          return res.json({
+            userId: adminUser.id.toString(),
             isAdmin: true,
             username: adminUser.username,
             firstName: adminUser.firstName,
@@ -108,8 +108,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (user) {
-        return res.json({ 
-          userId: user.id.toString(), 
+        return res.json({
+          userId: user.id.toString(),
           isAdmin: user.isAdmin,
           username: user.username,
           firstName: user.firstName,
@@ -129,8 +129,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { inventoryNumber, employeeName } = req.query;
       const equipment = await storage.getEquipment(
-        inventoryNumber as string | undefined, 
-        employeeName as string | undefined
+          inventoryNumber as string | undefined,
+          employeeName as string | undefined
       );
       res.json(equipment);
     } catch (error) {
@@ -175,14 +175,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const employeeName = row[4] ? row[4].toString().split(' ') : null;
         let assignedToUserId = null;
-        
+
         if (employeeName && employeeName.length >= 2) {
           const lastName = employeeName[0];
           const firstName = employeeName[1];
           const users = await db.query.users.findMany({
             where: and(
-              eq(schema.users.lastName, lastName),
-              eq(schema.users.firstName, firstName)
+                eq(schema.users.lastName, lastName),
+                eq(schema.users.firstName, firstName)
             )
           });
           if (users.length > 0) {
@@ -257,11 +257,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { role } = req.body;
-      
+
       if (!Object.values(schema.ROLES).includes(role as schema.Role)) {
         return res.status(400).json({ message: "Неверная роль" });
       }
-      
+
       const user = await storage.updateUserRole(Number(id), role as schema.Role);
       res.json(user);
     } catch (error) {
@@ -274,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { permissions } = req.body;
-      
+
       const result = await storage.updateUserPermissions(Number(id), permissions);
       res.json(result);
     } catch (error) {
@@ -286,7 +286,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/users/:id", authMiddleware, async (req, res) => {
     try {
       const { id } = req.params;
-      await storage.deleteUser(Number(id));
+      const userId = Number(id);
+
+      // Проверяем, есть ли у пользователя связанные задачи
+      const userTasks = await db.query.tasks.findMany({
+        where: eq(schema.tasks.createdByUserId, userId)
+      });
+
+      // Если есть связанные задачи, возвращаем ошибку
+      if (userTasks.length > 0) {
+        return res.status(400).json({
+          message: "Невозможно удалить пользователя, так как у него есть созданные задачи. Сначала удалите или переназначьте задачи."
+        });
+      }
+
+      // Проверяем, есть ли у пользователя назначенные задачи
+      const assignedTasks = await db.query.tasks.findMany({
+        where: eq(schema.tasks.assignedToUserId, userId)
+      });
+
+      // Если есть назначенные задачи, возвращаем ошибку
+      if (assignedTasks.length > 0) {
+        return res.status(400).json({
+          message: "Невозможно удалить пользователя, так как у него есть назначенные задачи. Сначала переназначьте задачи другому пользователю."
+        });
+      }
+
+      // Проверяем, есть ли у пользователя привязанное оборудование
+      const userEquipment = await db.query.equipment.findMany({
+        where: eq(schema.equipment.assignedToUserId, userId)
+      });
+
+      // Если есть привязанное оборудование, возвращаем ошибку
+      if (userEquipment.length > 0) {
+        return res.status(400).json({
+          message: "Невозможно удалить пользователя, так как за ним закреплено оборудование. Сначала переназначьте оборудование другому пользователю."
+        });
+      }
+
+      // Если связанных записей нет, удаляем пользователя
+      await storage.deleteUser(userId);
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -309,30 +348,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/tasks", authMiddleware, async (req, res) => {
     try {
       // For admin panel, use the admin user ID for created by
-      const userId = req.session?.userId === "admin" 
-        ? (await storage.getAdminUser())?.id 
-        : Number(req.session?.userId);
-      
+      const userId = req.session?.userId === "admin"
+          ? (await storage.getAdminUser())?.id
+          : Number(req.session?.userId);
+
       if (!userId) {
         return res.status(403).json({ message: "Пользователь не найден" });
       }
-      
+
       const data = { ...req.body, createdByUserId: userId };
       const task = await storage.createTask(data);
-      
+
       // Notify the assigned user if applicable
       if (task.assignedToUserId && telegramBot) {
         const assignedUser = await storage.getUserById(task.assignedToUserId);
         const creator = await storage.getUserById(task.createdByUserId);
-        
+
         if (assignedUser && assignedUser.telegramId && creator) {
           const message = `📝 Вам назначена новая задача!\n\nЗаголовок: ${task.title}\nОписание: ${task.description}\nСтатус: ${taskStatusToRussian(task.status)}\nОт: ${creator.lastName} ${creator.firstName}`;
-          
+
           telegramBot.telegram.sendMessage(assignedUser.telegramId, message)
-            .catch(err => console.error("Failed to send task notification:", err));
+              .catch(err => console.error("Failed to send task notification:", err));
         }
       }
-      
+
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -344,25 +383,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      
-      if (!Object.values(schema.TASK_STATUS).includes(status as schema.TaskStatus)) {
+
+      if (!Object.values(schema.TASK_STATUS).include(status as schema.TaskStatus)) {
         return res.status(400).json({ message: "Неверный статус задачи" });
       }
-      
+
       const task = await storage.updateTaskStatus(Number(id), status as schema.TaskStatus);
-      
+
       // Notify user about status change if task is assigned and we have a bot
       if (task.assignedToUserId && telegramBot) {
         const assignedUser = await storage.getUserById(task.assignedToUserId);
-        
+
         if (assignedUser && assignedUser.telegramId) {
           const message = `🔄 Изменение статуса задачи!\n\nЗаголовок: ${task.title}\nНовый статус: ${taskStatusToRussian(task.status)}`;
-          
+
           telegramBot.telegram.sendMessage(assignedUser.telegramId, message)
-            .catch(err => console.error("Failed to send status update notification:", err));
+              .catch(err => console.error("Failed to send status update notification:", err));
         }
       }
-      
+
       res.json(task);
     } catch (error) {
       console.error("Error updating task status:", error);
@@ -374,21 +413,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { userId } = req.body;
-      
+
       const task = await storage.assignTask(Number(id), Number(userId));
-      
+
       // Notify the newly assigned user
       if (task.assignedToUserId && telegramBot) {
         const assignedUser = await storage.getUserById(task.assignedToUserId);
-        
+
         if (assignedUser && assignedUser.telegramId) {
           const message = `📋 Вам назначена задача!\n\nЗаголовок: ${task.title}\nОписание: ${task.description}\nСтатус: ${taskStatusToRussian(task.status)}`;
-          
+
           telegramBot.telegram.sendMessage(assignedUser.telegramId, message)
-            .catch(err => console.error("Failed to send assignment notification:", err));
+              .catch(err => console.error("Failed to send assignment notification:", err));
         }
       }
-      
+
       res.json(task);
     } catch (error) {
       console.error("Error assigning task:", error);
@@ -410,30 +449,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/secure-passwords", authMiddleware, async (req, res) => {
     try {
       // For admin panel, use the admin user ID as sender
-      const senderId = req.session?.userId === "admin" 
-        ? (await storage.getAdminUser())?.id 
-        : Number(req.session?.userId);
-      
+      const senderId = req.session?.userId === "admin"
+          ? (await storage.getAdminUser())?.id
+          : Number(req.session?.userId);
+
       if (!senderId) {
         return res.status(403).json({ message: "Отправитель не найден" });
       }
-      
+
       const data = { ...req.body, senderId };
       const securePassword = await storage.createSecurePassword(data);
-      
+
       // Notify the receiver if we have a bot
       if (telegramBot) {
         const receiver = await storage.getUserById(securePassword.receiverId);
         const sender = await storage.getUserById(securePassword.senderId);
-        
+
         if (receiver && receiver.telegramId && sender) {
           const message = `🔐 Новая защищенная информация!\n\nОт: ${sender.lastName} ${sender.firstName}\nНазвание: ${securePassword.title}\nТип: ${securePasswordTypeToRussian(securePassword.type)}\n\nДля просмотра содержимого используйте команду /password ${securePassword.id}`;
-          
+
           telegramBot.telegram.sendMessage(receiver.telegramId, message)
-            .catch(err => console.error("Failed to send secure password notification:", err));
+              .catch(err => console.error("Failed to send secure password notification:", err));
         }
       }
-      
+
       res.status(201).json(securePassword);
     } catch (error) {
       console.error("Error creating secure password:", error);
@@ -466,12 +505,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/bot-settings", authMiddleware, async (req, res) => {
     try {
       const settings = await storage.updateBotSettings(req.body);
-      
+
       // Restart bot with new token if provided
       if (req.body.botToken) {
         setupBot(req.body.botToken);
       }
-      
+
       res.json(settings);
     } catch (error) {
       console.error("Error updating bot settings:", error);
@@ -490,7 +529,7 @@ function taskStatusToRussian(status: string): string {
     [schema.TASK_STATUS.COMPLETED]: "Выполнено",
     [schema.TASK_STATUS.URGENT]: "Срочно"
   };
-  
+
   return translations[status] || status;
 }
 
@@ -501,6 +540,6 @@ function securePasswordTypeToRussian(type: string): string {
     "api_key": "API ключ",
     "other": "Другое"
   };
-  
+
   return translations[type] || type;
 }
